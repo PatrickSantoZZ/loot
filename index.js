@@ -1,20 +1,20 @@
-const Command = require('command'),
-	config = require('./config.json'),
-	blacklist = config.blacklist.concat(config.motes),
+const config = require('./config.json'),
+	blacklist = config.blacklist.concat(config.motes, config.strongboxes),
 	trash = config.trash.concat(config.crystals, config.strongboxes)
 
 module.exports = function Loot(dispatch) {
-	const command = Command(dispatch)
+	const {command} = dispatch.require
 
 	let auto = config.modes.auto || false,
 		autotrash = config.modes.trash || false,
 		enabled = config.modes.easy || true
 
-	let cid = null,
+	let gameId = -1n,
 		playerId = -1,
-		location = null,
-		inventory = null,
-		loot = {},
+		myLoc = null,
+		mounted = false,
+		inven = null,
+		loot = new Map(),
 		lootTimeout = null
 
 	let commands = {
@@ -50,12 +50,11 @@ module.exports = function Loot(dispatch) {
 				autotrash = !autotrash
 
 				command.message('Autotrash toggled: ' + (autotrash ? 'on' : 'off'))
-				garbageCollect()
 			}
 		}
 	}
 
-	dispatch.hook('S_LOGIN', 1, event => { ({cid, playerId} = event) })
+	dispatch.hook('S_LOGIN', 12, event => { ({gameId, playerId} = event) })
 
 	command.add('loot', c => {
 		if(c)
@@ -64,51 +63,48 @@ module.exports = function Loot(dispatch) {
 					commands[cmd].run()
 	})
 
-	dispatch.hook('S_LOAD_TOPO', 1, event => {
-		location = event
-		loot = {}
+	dispatch.hook('S_LOAD_TOPO', 3, event => {
+		myLoc = event.loc
+		mounted = false
+		loot.clear()
 	})
 
-	dispatch.hook('C_PLAYER_LOCATION', 2, event => { location = event })
-	dispatch.hook('S_RETURN_TO_LOBBY', 'raw', () => { loot = {} })
+	dispatch.hook('C_PLAYER_LOCATION', 5, event => { myLoc = event.loc })
+	dispatch.hook('S_RETURN_TO_LOBBY', 'raw', () => { loot.clear() })
 
-	dispatch.hook('S_SPAWN_DROPITEM', 1, event => {
-		if(event.owners.some(owner => owner.id === playerId) && !blacklist.includes(event.item)) {
-			loot[event.id.toString()] = Object.assign(event, {priority: 0})
+	dispatch.hook('S_MOUNT_VEHICLE', 2, event => { if(event.gameId === gameId) mounted = true })
+	dispatch.hook('S_UNMOUNT_VEHICLE', 2, event => { if(event.gameId === gameId) mounted = false })
+
+	dispatch.hook('S_SPAWN_DROPITEM', 6, event => {
+		if(event.owners.some(owner => owner.playerId === playerId) && !blacklist.includes(event.item)) {
+			loot.set(event.gameId.toString(), Object.assign(event, {priority: 0}))
 
 			if(auto && !lootTimeout) tryLoot()
 		}
 	})
 
-	dispatch.hook('C_TRY_LOOT_DROPITEM', 1, event => {
+	dispatch.hook('C_TRY_LOOT_DROPITEM', 4, event => {
 		if(enabled && !lootTimeout) lootTimeout = setTimeout(tryLoot, config.lootInterval)
 	})
 
-	dispatch.hook('S_DESPAWN_DROPITEM', 1, event => {
-		delete loot[event.id.toString()]
-	})
+	dispatch.hook('S_DESPAWN_DROPITEM', 4, event => { loot.delete(event.gameId.toString()) })
 
-	/*dispatch.hook('S_SYSTEM_MESSAGE_LOOT_ITEM', 1, event => {
-		if(event.message === '@41') return false // Block "That isn't yours." system message.
-	})*/
+	dispatch.hook('S_INVEN', 16, event => {
+		inven = event.first ? event.items : inven.concat(event.items)
 
-	dispatch.hook('S_INVEN', 10, event => {
-		if(autotrash) {
-			inventory = inventory ? inventory.concat(event.items) : event.items
-
-			if(!event.more) {
-				for(let item of inventory)
+		if(!event.more) {
+			if(autotrash)
+				for(let item of inven)
 					if(item.slot < 40) continue // First 40 slots are reserved for equipment, etc.
-					else if(trash.includes(item.dbid)) deleteItem(item.slot, item.amount)
+					else if(trash.includes(item.id)) deleteItem(item.slot, item.amount)
 
-				inventory = null
-			}
+			inven = null
 		}
 	})
 
 	function deleteItem(slot, amount) {
-		dispatch.toServer('C_DEL_ITEM', 1, {
-			cid: cid,
+		dispatch.toServer('C_DEL_ITEM', 2, {
+			gameId,
 			slot: slot - 40,
 			amount
 		})
@@ -118,22 +114,16 @@ module.exports = function Loot(dispatch) {
 		clearTimeout(lootTimeout)
 		lootTimeout = null
 
-		let lootItems = Object.values(loot).sort((a, b) => a.priority - b.priority)
+		if(!loot.size) return
 
-		if(!lootItems.length) return
-
-		for(let item of lootItems)
-			if(dist3D(location, item) < config.lootRadius) {
-				dispatch.toServer('C_TRY_LOOT_DROPITEM', 1, { id: item.id })
-				item.priority++
-				lootTimeout = setTimeout(tryLoot, config.lootInterval)
-				return
-			}
+		if(!mounted)
+			for(let l of [...loot.values()].sort((a, b) => a.priority - b.priority))
+				if(myLoc.dist3D(l.loc) <= config.lootRadius) {
+					dispatch.toServer('C_TRY_LOOT_DROPITEM', 4, l)
+					lootTimeout = setTimeout(tryLoot, Math.min(config.lootInterval * ++l.priority, config.lootThrottleMax))
+					return
+				}
 
 		if(auto) setTimeout(tryLoot, config.lootScanInterval)
 	}
-}
-
-function dist3D(loc1, loc2) {
-	return Math.sqrt(Math.pow(loc2.x - loc1.x, 2) + Math.pow(loc2.y - loc1.y, 2) + Math.pow(loc2.z - loc1.z, 2))
 }

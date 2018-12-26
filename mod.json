@@ -1,0 +1,8 @@
+{
+	"name": "loot",
+	"update": "github:tera-mods/loot",
+	"conflicts": ["loot-old"],
+	"title": "Loot",
+	"authors": ["Pinkie Pie", "Saegusa"],
+	"description": "Automatically loots items near your character."
+}
