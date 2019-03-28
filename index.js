@@ -2,8 +2,8 @@ const config = require('./config.json'),
 	blacklist = config.blacklist.concat(config.motes, config.strongboxes),
 	trash = config.trash.concat(config.crystals, config.strongboxes)
 
-module.exports = function Loot(dispatch) {
-	const {command} = dispatch.require
+module.exports = function Loot(mod) {
+	const {command} = mod.require
 
 	let auto = config.modes.auto || false,
 		autotrash = config.modes.trash || false,
@@ -54,7 +54,7 @@ module.exports = function Loot(dispatch) {
 		}
 	}
 
-	dispatch.hook('S_LOGIN', 12, event => { ({gameId, playerId} = event) })
+	mod.hook('S_LOGIN', 12, event => { ({gameId, playerId} = event) })
 
 	command.add('loot', c => {
 		if(c)
@@ -63,19 +63,19 @@ module.exports = function Loot(dispatch) {
 					commands[cmd].run()
 	})
 
-	dispatch.hook('S_LOAD_TOPO', 3, event => {
+	mod.hook('S_LOAD_TOPO', 3, event => {
 		myLoc = event.loc
 		mounted = false
 		loot.clear()
 	})
 
-	dispatch.hook('C_PLAYER_LOCATION', 5, event => { myLoc = event.loc })
-	dispatch.hook('S_RETURN_TO_LOBBY', 'raw', () => { loot.clear() })
+	mod.hook('C_PLAYER_LOCATION', 5, event => { myLoc = event.loc })
+	mod.hook('S_RETURN_TO_LOBBY', 'raw', () => { loot.clear() })
 
-	dispatch.hook('S_MOUNT_VEHICLE', 2, event => { if(event.gameId === gameId) mounted = true })
-	dispatch.hook('S_UNMOUNT_VEHICLE', 2, event => { if(event.gameId === gameId) mounted = false })
+	mod.hook('S_MOUNT_VEHICLE', 2, event => { if(event.gameId === gameId) mounted = true })
+	mod.hook('S_UNMOUNT_VEHICLE', 2, event => { if(event.gameId === gameId) mounted = false })
 
-	dispatch.hook('S_SPAWN_DROPITEM', mod.patchVersion < 80 ? 6 : 7, event => {
+	mod.hook('S_SPAWN_DROPITEM', mod.patchVersion < 80 ? 6 : 7, event => {
 		if(event.owners.some(owner => owner.playerId === playerId) && !blacklist.includes(event.item)) {
 			loot.set(event.gameId, Object.assign(event, {priority: 0}))
 
@@ -83,13 +83,13 @@ module.exports = function Loot(dispatch) {
 		}
 	})
 
-	dispatch.hook('C_TRY_LOOT_DROPITEM', 4, event => {
+	mod.hook('C_TRY_LOOT_DROPITEM', 4, event => {
 		if(enabled && !lootTimeout) lootTimeout = setTimeout(tryLoot, config.lootInterval)
 	})
 
-	dispatch.hook('S_DESPAWN_DROPITEM', 4, event => { loot.delete(event.gameId) })
+	mod.hook('S_DESPAWN_DROPITEM', 4, event => { loot.delete(event.gameId) })
 
-	dispatch.hook('S_INVEN', mod.patchVersion < 80 ? 17 : 18, event => {
+	mod.hook('S_INVEN', mod.patchVersion < 80 ? 17 : 18, event => {
 		inven = event.first ? event.items : inven.concat(event.items)
 
 		if(!event.more) {
@@ -103,7 +103,7 @@ module.exports = function Loot(dispatch) {
 	})
 
 	function deleteItem(slot, amount) {
-		dispatch.toServer('C_DEL_ITEM', 2, {
+		mod.toServer('C_DEL_ITEM', 2, {
 			gameId,
 			slot: slot - 40,
 			amount
@@ -119,7 +119,7 @@ module.exports = function Loot(dispatch) {
 		if(!mounted)
 			for(let l of [...loot.values()].sort((a, b) => a.priority - b.priority))
 				if(myLoc.dist3D(l.loc) <= config.lootRadius) {
-					dispatch.toServer('C_TRY_LOOT_DROPITEM', 4, l)
+					mod.toServer('C_TRY_LOOT_DROPITEM', 4, l)
 					lootTimeout = setTimeout(tryLoot, Math.min(config.lootInterval * ++l.priority, config.lootThrottleMax))
 					return
 				}
