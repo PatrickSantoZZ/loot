@@ -75,9 +75,9 @@ module.exports = function Loot(dispatch) {
 	dispatch.hook('S_MOUNT_VEHICLE', 2, event => { if(event.gameId === gameId) mounted = true })
 	dispatch.hook('S_UNMOUNT_VEHICLE', 2, event => { if(event.gameId === gameId) mounted = false })
 
-	dispatch.hook('S_SPAWN_DROPITEM', 6, event => {
+	dispatch.hook('S_SPAWN_DROPITEM', mod.patchVersion < 80 ? 6 : 7, event => {
 		if(event.owners.some(owner => owner.playerId === playerId) && !blacklist.includes(event.item)) {
-			loot.set(event.gameId.toString(), Object.assign(event, {priority: 0}))
+			loot.set(event.gameId, Object.assign(event, {priority: 0}))
 
 			if(auto && !lootTimeout) tryLoot()
 		}
@@ -87,9 +87,9 @@ module.exports = function Loot(dispatch) {
 		if(enabled && !lootTimeout) lootTimeout = setTimeout(tryLoot, config.lootInterval)
 	})
 
-	dispatch.hook('S_DESPAWN_DROPITEM', 4, event => { loot.delete(event.gameId.toString()) })
+	dispatch.hook('S_DESPAWN_DROPITEM', 4, event => { loot.delete(event.gameId) })
 
-	dispatch.hook('S_INVEN', 16, event => {
+	dispatch.hook('S_INVEN', mod.patchVersion < 80 ? 17 : 18, event => {
 		inven = event.first ? event.items : inven.concat(event.items)
 
 		if(!event.more) {
