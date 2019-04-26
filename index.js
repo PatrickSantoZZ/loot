@@ -54,7 +54,7 @@ module.exports = function Loot(mod) {
 		}
 	}
 
-	mod.hook('S_LOGIN', 12, event => { ({gameId, playerId} = event) })
+	mod.hook('S_LOGIN', mod.patchVersion < 81 ? 12 : 13, event => { ({gameId, playerId} = event) })
 
 	command.add('loot', c => {
 		if(c)
