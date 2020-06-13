@@ -4,5 +4,7 @@
 		"index.js": "DIvaQOhqL1kRwbuWtyIKwQfOeg5cf5p1FKoSDd7OmlI=",
 		"mod.json": "yn0j0vk6L0jzWoK7/mK1hIrnZU7nJTaP6p5r85ZvFeE=",
 		"README.md": "fjUyGQT9cXoNwtr+egPQTshlNXnQHj+0tvZRCc3NYJ4="
-	}
+	},
+	"publicKey": "MCowBQYDK2VwAyEAY31fpV8rIvZ3zGJE6nqoLXcI27/C3xmjDWV7PDavK4w=",
+	"signature": "QZa/xvG+A3hLZzTybFZSR/94TAGo115yR92KMqc6MVDntqLNwimuiA2c0oj9szehSgcoKYGU3B1sneBnZYSQCg=="
 }
